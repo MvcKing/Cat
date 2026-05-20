@@ -1,421 +1,543 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KYOGOKU Shopee-直播排班管理系統</title>
-    <link rel="icon" href="https://github.com/MvcKing/Live-Streaming-Schedule/blob/main/Butterfly%20icon.png?raw=true" type="image/png">
+    <title>VideoCutter Pro - 高效影片切片管理系統</title>
     <style>
-        :root { 
-            --primary: #bb86fc; /* 炫彩紫 */
-            --secondary: #03dac6; /* 霓虹綠 */
-            --time-purple: #d69dff; /* 亮紫色(時間專用) */
-            --today-blue: #00d2ff;
-            --bg: #0f111a; 
-            --card-bg: rgba(30, 33, 45, 0.8);
-            --border: rgba(255, 255, 255, 0.1); 
-            --text: #e0e0e0; 
-            --danger: #cf6679; 
-            --note-bg: rgba(187, 134, 252, 0.1); 
-            --note-text: #bb86fc; 
-            --accent-gradient: linear-gradient(45deg, #ff00cc, #3333ff);
+        :root {
+            --bg-main: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --accent: #ef4444;
+            --border: #e2e8f0;
         }
 
-        body { 
-            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; 
-            background: var(--bg); 
-            background-image: radial-gradient(circle at 50% 0%, #1a1e2e 0%, #0f111a 100%);
-            margin: 0; 
-            padding: 15px; 
-            color: var(--text); 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
             min-height: 100vh;
         }
 
-        /* 頂部導航欄 */
-        .top-nav {
+        header {
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
             display: flex;
-            justify-content: center;
-            padding: 15px 0;
-            margin-bottom: 10px;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .nav-btn {
+        h1 {
+            font-size: 1.5rem;
+            color: var(--text-main);
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 10px 25px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--primary);
-            border-radius: 50px;
-            color: white;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 15px rgba(187, 134, 252, 0.2);
-            backdrop-filter: blur(5px);
+            gap: 8px;
         }
 
-        .nav-btn:hover {
-            background: var(--primary);
-            color: #0f111a;
-            box-shadow: 0 0 25px rgba(187, 134, 252, 0.5);
-            transform: translateY(-2px);
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 24px;
+            flex: 1;
         }
 
-        .nav-btn img {
-            width: 20px;
-            height: 20px;
-            filter: drop-shadow(0 0 2px rgba(255,255,255,0.5));
+        @media (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
         }
 
-        /* 日曆容器 */
-        .calendar-container { 
-            width: 100%; 
-            overflow-x: auto; 
-            background: var(--card-bg); 
-            backdrop-filter: blur(10px);
-            border-radius: 20px; 
+        .video-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 8px;
             border: 1px solid var(--border);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
-            margin-bottom: 25px; 
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
-        .calendar-box { padding: 25px; min-width: 900px; } 
-
-        .calendar-header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-bottom: 25px; 
-            border-bottom: 1px solid var(--border); 
-            padding-bottom: 15px; 
-        }
-        .calendar-header h3 { 
-            font-size: 24px; 
-            margin: 0; 
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-weight: 900; 
-            letter-spacing: 1px;
+        .upload-zone {
+            border: 2px dashed var(--border);
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            background: var(--bg-main);
+            transition: all 0.2s;
         }
 
-        #monthSelect {
-            background: #2a2d3e;
-            color: white;
-            border: 1px solid var(--border);
-            padding: 8px 15px;
-            border-radius: 10px;
-            outline: none;
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: #eff6ff;
         }
 
-        .calendar-grid { 
-            display: grid; 
-            grid-template-columns: repeat(7, 1fr); 
-            gap: 1px;
-            background: var(--border);
-            border: 1px solid var(--border);
-        }
-
-        .weekday-label { 
-            background: rgba(255, 255, 255, 0.05); 
-            text-align: center; 
-            font-size: 14px; 
-            font-weight: bold; 
-            padding: 15px 0; 
-            color: var(--primary); 
-        }
-
-        .day-cell { 
-            background: #161922; 
-            min-height: 180px; 
-            padding: 10px; 
-            cursor: pointer; 
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-            position: relative; 
-            display: flex; 
-            flex-direction: column; 
-            z-index: 0; 
-            overflow: hidden; 
-        }
-
-        .day-cell:hover { background: #1e2230; transform: scale(1.02); z-index: 10; box-shadow: 0 0 20px rgba(0,0,0,0.4); }
-
-        /* 霓虹特效 */
-        .day-cell::before {
-            content: ''; position: absolute; z-index: -2; left: -50%; top: -50%; width: 200%; height: 200%;
-            background-repeat: no-repeat; background-size: 50% 50%, 50% 50%;
-            background-position: 0 0, 100% 0, 100% 100%, 0 100%;
-            animation: rotateGlow 4s linear infinite;
-            display: none; 
-        }
-        .day-cell::after {
-            content: ''; position: absolute; z-index: -1; inset: 2px; background: #161922; border-radius: 2px;
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
             display: none;
         }
 
-        .glow-today::before { display: block; background-image: conic-gradient(transparent, #00d2ff, #3a7bd5, #00d2ff, transparent); }
-        .glow-today::after { display: block; }
-        .glow-latest-data::before { display: block; background-image: conic-gradient(transparent, #ff5722, #ffeb3b, #ff5722, transparent); }
-        .glow-latest-data::after { display: block; }
-
-        @keyframes rotateGlow { 100% { transform: rotate(1turn); } }
-
-        .day-num { font-size: 20px; font-weight: 800; color: rgba(255,255,255,0.2); margin-bottom: 8px; position: relative; z-index: 2; }
-        .day-cell.has-data .day-num { color: var(--primary); }
-
-        .day-info { font-size: 12px; line-height: 1.6; flex-grow: 1; position: relative; z-index: 2; }
-        .info-txt { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; color: #b0b3b8; }
-        
-        /* 時間文字特別標色 */
-        .info-time { color: var(--time-purple) !important; font-weight: bold; }
-
-        .info-note-box { 
-            margin-top: auto; 
-            background: var(--note-bg); 
-            color: var(--note-text); 
-            font-size: 11px; 
-            padding: 6px 8px; 
-            border-radius: 6px; 
-            border-right: 2px solid var(--primary); 
-            min-height: 40px;
-            z-index: 2;
+        video {
+            width: 100%;
+            height: 100%;
+            display: block;
         }
 
-        /* 編輯區塊 */
-        .edit-section { 
-            background: var(--card-bg); 
-            backdrop-filter: blur(15px);
-            border-radius: 20px; 
-            padding: 30px; 
-            display: none; 
-            margin-bottom: 60px; 
+        .control-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
             border: 1px solid var(--border);
-            border-top: 4px solid var(--primary);
+            background: white;
+            color: var(--text-main);
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s;
         }
-        .edit-section.active { display: block; animation: fadeInUp 0.5s ease; }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        .edit-section h3 { margin-top: 0; color: var(--primary); font-size: 22px; margin-bottom: 25px; }
-        
-        .input-row { display: flex; gap: 20px; flex-wrap: wrap; }
-        .input-group { margin-bottom: 22px; flex: 1; min-width: 250px; }
-        
-        label { display: block; font-size: 13px; color: #999; margin-bottom: 8px; font-weight: 600; }
-        input { 
-            width: 100%; 
-            padding: 14px; 
-            background: rgba(0,0,0,0.2);
-            border: 1px solid var(--border); 
-            border-radius: 12px; 
-            font-size: 15px; 
+        button:hover {
+            background: var(--bg-main);
+            border-color: #cbd5e1;
+        }
+
+        button.btn-primary {
+            background: var(--primary);
             color: white;
-            outline: none; 
+            border-color: var(--primary);
         }
-        input:focus { border-color: var(--primary); box-shadow: 0 0 10px rgba(187, 134, 252, 0.3); }
 
-        .btn-group { display: flex; gap: 15px; margin-top: 15px; }
-        .btn { 
-            flex: 1; border: none; padding: 16px; border-radius: 12px; 
-            font-weight: 700; font-size: 16px; cursor: pointer; 
-            transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; 
+        button.btn-primary:hover {
+            background: var(--primary-hover);
         }
-        .btn-save { background: var(--accent-gradient); color: white; }
-        .btn-save:hover { filter: brightness(1.2); transform: translateY(-2px); }
-        .btn-clear { background: #333; color: #bbb; border: 1px solid #444; }
 
-        #loader { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(15, 17, 26, 0.95); 
-            display: none; justify-content: center; align-items: center; 
-            z-index: 1000; flex-direction: column; 
+        button.btn-danger {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
         }
-        .spinner { 
-            border: 3px solid rgba(255,255,255,0.1); 
-            border-top: 3px solid var(--primary); 
-            border-radius: 50%; width: 40px; height: 40px; 
-            animation: spin 1s linear infinite; margin-bottom: 15px; 
+
+        .time-display {
+            font-family: monospace;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--text-main);
+            margin-left: auto;
+            background: var(--bg-main);
+            padding: 4px 8px;
+            border-radius: 4px;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .speed-selector {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: white;
+            font-size: 0.9rem;
+        }
+
+        .segment-section {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 120px);
+            position: sticky;
+            top: 24px;
+        }
+
+        .segment-list-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .segment-item {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            background: var(--bg-main);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+        }
+
+        .segment-item:hover {
+            border-color: var(--primary);
+        }
+
+        .segment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .segment-time {
+            font-family: monospace;
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 0.95rem;
+        }
+
+        .segment-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .segment-note {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            resize: vertical;
+        }
+
+        .segment-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .segment-actions button {
+            padding: 4px 8px;
+            font-size: 0.8rem;
+        }
+
+        .hidden-input {
+            display: none;
+        }
+
+        .empty-state {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px 20px;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
 
-<!-- 頂部導航鈕 -->
-<div class="top-nav">
-    <a href="https://mvcking.github.io/KG/index.html" target="_blank" class="nav-btn">
-        <img src="https://github.com/MvcKing/Live-Streaming-Schedule/blob/main/Butterfly%20icon.png?raw=true" alt="KG Icon">
-        KG 產品資訊系統
-    </a>
-</div>
-
-<div id="loader"><div class="spinner"></div><span style="letter-spacing: 2px; color: var(--primary);">SYNCING DATA...</span></div>
-
-<div class="calendar-container">
-    <div class="calendar-box">
-        <div class="calendar-header">
-            <h3 id="monthTitle">LOADING...</h3>
-            <select id="monthSelect" onchange="loadMonthlyData()"></select>
+    <header>
+        <h1><span>🎬</span> VideoCutter Pro 影片切片與重點標記系統</h1>
+        <div class="system-actions">
+            <button id="exportBtn" class="btn-primary" disabled>📦 匯出切片資料 (JSON)</button>
         </div>
-        <div class="calendar-grid" id="calendarGrid">
-            <div class="weekday-label">SUN</div>
-            <div class="weekday-label">MON</div>
-            <div class="weekday-label">TUE</div>
-            <div class="weekday-label">WED</div>
-            <div class="weekday-label">THU</div>
-            <div class="weekday-label">FRI</div>
-            <div class="weekday-label">SAT</div>
+    </header>
+
+    <div class="main-container">
+        <!-- 左側：影片播放與基礎操作區 -->
+        <div class="video-section">
+            <div class="card">
+                <div class="upload-zone" id="dropZone">
+                    <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">拖曳影片檔案至此處，或點擊上傳</p>
+                    <p style="font-size: 0.85rem; color: var(--text-muted);">支援 MP4, WebM 等常見瀏覽器相容格式</p>
+                    <input type="file" id="videoInput" class="hidden-input" accept="video/*">
+                </div>
+
+                <div class="video-wrapper" id="videoWrapper">
+                    <video id="mainVideo" controls></video>
+                </div>
+
+                <div class="control-panel" id="videoControls" style="display: none;">
+                    <button id="markStartBtn" class="btn-primary">⏱️ 標記起點 [</button>
+                    <button id="markEndBtn" class="btn-primary">⏱️ 標記終點 ]</button>
+                    <button id="addSegmentBtn" style="background: #10b981; color: white; border-color: #10b981;">💾 儲存此片段</button>
+                    
+                    <select id="speedSelect" class="speed-selector">
+                        <option value="0.5">0.5x 慢速</option>
+                        <option value="1" selected>1.0x 正常</option>
+                        <option value="1.5">1.5x 快速</option>
+                        <option value="2">2.0x 倍速</option>
+                    </select>
+
+                    <div class="time-display">
+                        <span id="startTimeDisp">00:00.00</span> - <span id="endTimeDisp">00:00.00</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card" id="shortcutGuide" style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.6;">
+                <strong>💡 系統快捷鍵提示：</strong><br>
+                • <kbd>空白鍵 (Space)</kbd>：播放 / 暫停影片<br>
+                • <kbd> [ </kbd> 鍵：快速將目前時間帶入「片段起點」<br>
+                • <kbd> ] </kbd> 鍵：快速將目前時間帶入「片段終點」<br>
+                • <kbd>方向鍵左/右 (← / →)</kbd>：微調影片前進/後退 1 秒
+            </div>
+        </div>
+
+        <!-- 右側：已切片重點清單與管理區 -->
+        <div class="card segment-section">
+            <h2>📌 已解析重點片段 (<span id="segmentCount">0</span>)</h2>
+            <div class="segment-list-container" id="segmentList">
+                <div class="empty-state" id="emptyState">
+                    尚無切片資料。請先上傳影片並使用左側控制面板建立重點片段。
+                </div>
+            </div>
         </div>
     </div>
-</div>
 
-<div class="edit-section" id="editSection">
-    <h3 id="selectedDateTitle">📅 日期選取</h3>
-    <div class="input-row">
-        <div class="input-group"><label>⏰ 直播時間</label><input type="text" id="time" placeholder="請填寫時間"></div>
-        <div class="input-group"><label>📺 直播台名稱</label><input type="text" id="platform" placeholder="直營,毛髮"></div>
-    </div>
-    <div class="input-row">
-        <div class="input-group"><label>🎙️ 直播主 (Host)</label><input type="text" id="host" placeholder="如如,君君,姿姿,蔓蔓"></div>
-        <div class="input-group"><label>🤝 小幫手 (Assistant)</label><input type="text" id="assistant" placeholder="Fish,孟孟"></div>
-    </div>
-    <div class="input-group"><label>📝 備註</label><input type="text" id="note" placeholder="當日特殊事項備註"></div>
-    <div class="btn-group">
-        <button class="btn btn-clear" id="clearBtn">🗑️ 清除當日</button>
-        <button class="btn btn-save" id="saveBtn">💾 儲存並同步更新</button>
-    </div>
-</div>
-
-<script>
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbyk8csORmUcxozfFFzhb8PG6VUOiTL_LckXDOS-IZzNLlmU9OofDCPIw6ZTdYjgJ4ag/exec"; 
-    let fullMonthData = [];
-
-    function init() { setupMonthOptions(); loadMonthlyData(); }
-    function setupMonthOptions() {
-        const select = document.getElementById('monthSelect');
-        const now = new Date();
-        for (let i = 0; i < 12; i++) {
-            const date = new Date(now.getFullYear(), i, 1);
-            const val = `${date.getFullYear()}-${String(i + 1).padStart(2, '0')}`;
-            const option = new Option(`${i + 1}月`, val);
-            if (i === now.getMonth()) option.selected = true;
-            select.add(option);
-        }
-    }
-
-    async function loadMonthlyData() {
-        const selectedMonth = document.getElementById('monthSelect').value;
-        document.getElementById('monthTitle').innerText = selectedMonth.replace('-', ' / ') + " SCHEDULE";
-        document.getElementById('loader').style.display = 'flex';
-        try {
-            const resp = await fetch(`${GAS_URL}?month=${selectedMonth}`);
-            fullMonthData = await resp.json();
-            renderCalendar(selectedMonth);
-        } catch (e) { alert("連線超時，請檢查網絡"); }
-        document.getElementById('loader').style.display = 'none';
-    }
-
-    function renderCalendar(monthStr) {
-        const [year, month] = monthStr.split('-').map(Number);
-        const grid = document.getElementById('calendarGrid');
-        while (grid.children.length > 7) grid.removeChild(grid.lastChild);
-
-        const firstDay = new Date(year, month - 1, 1).getDay();
-        const daysInMonth = new Date(year, month, 0).getDate();
+    <script>
+        // 系統變數宣告
+        let activeVideoFile = null;
+        let segmentIdCounter = 0;
+        let segments = [];
         
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+        // 目前暫存的切片端點
+        let currentStart = 0;
+        let currentEnd = 0;
 
-        const latestDataRecord = fullMonthData
-            .filter(r => {
-                const rDate = new Date(r.Date.replace(/-/g, '/'));
-                const hasInfo = r.Platform || r.Host || r["Host (直播主)"] || r.Note;
-                return rDate > today && hasInfo;
-            })
-            .sort((a, b) => new Date(a.Date.replace(/-/g, '/')) - new Date(b.Date.replace(/-/g, '/')))[0];
+        // DOM 節點獲取
+        const dropZone = document.getElementById('dropZone');
+        const videoInput = document.getElementById('videoInput');
+        const mainVideo = document.getElementById('mainVideo');
+        const videoWrapper = document.getElementById('videoWrapper');
+        const videoControls = document.getElementById('videoControls');
+        const markStartBtn = document.getElementById('markStartBtn');
+        const markEndBtn = document.getElementById('markEndBtn');
+        const addSegmentBtn = document.getElementById('addSegmentBtn');
+        const startTimeDisp = document.getElementById('startTimeDisp');
+        const endTimeDisp = document.getElementById('endTimeDisp');
+        const speedSelect = document.getElementById('speedSelect');
+        const segmentList = document.getElementById('segmentList');
+        const emptyState = document.getElementById('emptyState');
+        const segmentCount = document.getElementById('segmentCount');
+        const exportBtn = document.getElementById('exportBtn');
+
+        // --- 檔案上傳與初始化模組 ---
+        dropZone.addEventListener('click', () => videoInput.click());
         
-        const latestDateStr = latestDataRecord ? latestDataRecord.Date.replace(/-/g, '/') : null;
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'var(--primary)';
+        });
 
-        for (let i = 0; i < firstDay; i++) {
-            const empty = document.createElement('div');
-            empty.className = "day-cell"; empty.style.background = "rgba(0,0,0,0.2)";
-            grid.appendChild(empty);
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = 'var(--border)';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length > 0) {
+                handleVideoInit(e.dataTransfer.files[0]);
+            }
+        });
+
+        videoInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleVideoInit(e.target.files[0]);
+            }
+        });
+
+        function handleVideoInit(file) {
+            if (!file.type.startsWith('video/')) {
+                alert('請上傳正確的影片格式檔案。');
+                return;
+            }
+            activeVideoFile = file;
+            const fileURL = URL.createObjectURL(file);
+            mainVideo.src = fileURL;
+            
+            // 介面切換
+            dropZone.style.display = 'none';
+            videoWrapper.style.display = 'block';
+            videoControls.style.display = 'flex';
+            exportBtn.disabled = false;
+
+            // 重設時間參數
+            mainVideo.addEventListener('loadedmetadata', () => {
+                currentStart = 0;
+                currentEnd = mainVideo.duration;
+                updateTimeDisplay();
+            });
         }
 
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = `${year}/${String(month).padStart(2, '0')}/${String(d).padStart(2, '0')}`;
-            const record = fullMonthData.find(r => r.Date.replace(/-/g, '/') === dateStr);
-            const hasData = record && (record.Platform || record.Host || record["Host (直播主)"] || record.Note);
-            
-            const cell = document.createElement('div');
-            cell.className = `day-cell ${hasData ? 'has-data' : ''}`;
-            
-            if (dateStr === todayStr) {
-                cell.classList.add('glow-today');
-            } else if (dateStr === latestDateStr) {
-                cell.classList.add('glow-latest-data');
-            }
-            
-            let infoHtml = '';
-            if (record) {
-                const t = (record.Time || '').includes("1899") ? "" : (record.Time || '');
-                const p = record.Platform || '';
-                const h = record["Host (直播主)"] || record.Host || '';
-                const a = record["Assistant (小幫手)"] || record.Assistant || '';
-                const n = record.Note || '';
-                if (p || h || n) {
-                    infoHtml = `
-                        <div class="day-info">
-                            <span class="info-txt">📺 <span style="color:#fff">${p}</span></span>
-                            <span class="info-txt info-time">⏰ ${t}</span>
-                            <span class="info-txt" style="color:var(--secondary);">🎙️ ${h}</span>
-                            <span class="info-txt" style="color:var(--today-blue);">🤝 ${a}</span>
-                        </div>
-                        ${n ? `<div class="info-note-box">📝 ${n}</div>` : ''}
-                    `;
-                }
-            }
-            cell.innerHTML = `<div class="day-num">${d}</div>${infoHtml}`;
-            cell.onclick = () => openEdit(dateStr, record);
-            grid.appendChild(cell);
+        // --- 影片時間軸控制模組 ---
+        markStartBtn.addEventListener('click', () => {
+            currentStart = mainVideo.currentTime;
+            if (currentStart > currentEnd) currentEnd = currentStart;
+            updateTimeDisplay();
+        });
+
+        markEndBtn.addEventListener('click', () => {
+            currentEnd = mainVideo.currentTime;
+            if (currentEnd < currentStart) currentStart = currentEnd;
+            updateTimeDisplay();
+        });
+
+        speedSelect.addEventListener('change', (e) => {
+            mainVideo.playbackRate = parseFloat(e.target.value);
+        });
+
+        function formatTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 100);
+            return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
         }
-    }
 
-    function openEdit(dateStr, record) {
-        document.getElementById('editSection').classList.add('active');
-        document.getElementById('selectedDateTitle').innerText = `📅 ${dateStr} 編輯模式`;
-        document.getElementById('time').value = (record && record.Time && !record.Time.includes("1899")) ? record.Time : '';
-        document.getElementById('platform').value = record ? (record.Platform || '') : '';
-        document.getElementById('host').value = record ? (record["Host (直播主)"] || record.Host || '') : '';
-        document.getElementById('assistant').value = record ? (record["Assistant (小幫手)"] || record.Assistant || '') : '';
-        document.getElementById('note').value = record ? (record.Note || '') : '';
-        document.getElementById('saveBtn').onclick = () => processAction(dateStr, false);
-        document.getElementById('clearBtn').onclick = () => { if(confirm("確定清除此日期的所有排班？")) processAction(dateStr, true); };
-        document.getElementById('editSection').scrollIntoView({ behavior: 'smooth' });
-    }
+        function updateTimeDisplay() {
+            startTimeDisp.textContent = formatTime(currentStart);
+            endTimeDisp.textContent = formatTime(currentEnd);
+        }
 
-    async function processAction(dateStr, isClear) {
-        const [year, month, day] = dateStr.split('/');
-        const dateObj = new Date(year, month - 1, day);
-        const daysOfWeek = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-        const data = {
-            date: dateStr, month: `${year}-${month}`, weekday: daysOfWeek[dateObj.getDay()],
-            time: isClear ? '' : document.getElementById('time').value,
-            platform: isClear ? '' : document.getElementById('platform').value,
-            host: isClear ? '' : document.getElementById('host').value,
-            assistant: isClear ? '' : document.getElementById('assistant').value,
-            note: isClear ? '' : document.getElementById('note').value
-        };
-        document.getElementById('loader').style.display = 'flex';
-        try {
-            await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
-            alert("資料已同步至雲端"); loadMonthlyData();
-        } catch (e) { alert("同步失敗，請稍後再試"); }
-        document.getElementById('loader').style.display = 'none';
-    }
+        // --- 快捷鍵配置模組 ---
+        window.addEventListener('keydown', (e) => {
+            // 如果使用者正在輸入文字輸入框，不觸發快捷鍵
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
 
-    init();
-</script>
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (mainVideo.paused) mainVideo.play();
+                else mainVideo.pause();
+            } else if (e.key === '[') {
+                currentStart = mainVideo.currentTime;
+                if (currentStart > currentEnd) currentEnd = currentStart;
+                updateTimeDisplay();
+            } else if (e.key === ']') {
+                currentEnd = mainVideo.currentTime;
+                if (currentEnd < currentStart) currentStart = currentEnd;
+                updateTimeDisplay();
+            } else if (e.key === 'ArrowRight') {
+                mainVideo.currentTime += 1;
+            } else if (e.key === 'ArrowLeft') {
+                mainVideo.currentTime -= 1;
+            }
+        });
+
+        // --- 切片管理模組 ---
+        addSegmentBtn.addEventListener('click', () => {
+            if (!activeVideoFile) return;
+
+            segmentIdCounter++;
+            const newSegment = {
+                id: segmentIdCounter,
+                startTime: currentStart,
+                endTime: currentEnd,
+                duration: currentEnd - currentStart,
+                note: `重點片段說明 #${segmentIdCounter}`,
+                createdAt: new Date().toISOString()
+            };
+
+            segments.push(newSegment);
+            renderSegments();
+        });
+
+        function renderSegments() {
+            // 排序：依據影片時間由前到後
+            segments.sort((a, b) => a.startTime - b.startTime);
+            
+            // 清空除 emptyState 外的節點
+            const items = segmentList.querySelectorAll('.segment-item');
+            items.forEach(item => item.remove());
+
+            if (segments.length === 0) {
+                emptyState.style.display = 'block';
+                segmentCount.textContent = '0';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            segmentCount.textContent = segments.length;
+
+            segments.forEach(seg => {
+                const segEl = document.createElement('div');
+                segEl.className = 'segment-item';
+                segEl.innerHTML = `
+                    <div class="segment-header">
+                        <span class="segment-time">⏱️ ${formatTime(seg.startTime)} - ${formatTime(seg.endTime)}</span>
+                        <span class="segment-meta">長度: ${(seg.duration).toFixed(2)}s</span>
+                    </div>
+                    <textarea class="segment-note" data-id="${seg.id}" placeholder="請輸入此重點片段的備註或標籤...">${seg.note}</textarea>
+                    <div class="segment-actions">
+                        <button class="btn-preview" data-start="${seg.startTime}">▶️ 重播此段</button>
+                        <button class="btn-danger" data-id="${seg.id}">🗑️ 刪除</button>
+                    </div>
+                `;
+
+                // 事件綁定：即時儲存備註文字
+                segEl.querySelector('.segment-note').addEventListener('input', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    const targetSeg = segments.find(s => s.id === id);
+                    if (targetSeg) targetSeg.note = e.target.value;
+                });
+
+                // 事件綁定：跳轉重播片段
+                segEl.querySelector('.btn-preview').addEventListener('click', (e) => {
+                    mainVideo.currentTime = parseFloat(e.target.dataset.start);
+                    mainVideo.play();
+                });
+
+                // 事件綁定：刪除切片
+                segEl.querySelector('.btn-danger').addEventListener('click', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    segments = segments.filter(s => s.id !== id);
+                    renderSegments();
+                });
+
+                segmentList.appendChild(segEl);
+            });
+        }
+
+        // --- 資料匯出模組 (JSON) ---
+        exportBtn.addEventListener('click', () => {
+            if (segments.length === 0) {
+                alert('目前沒有任何切片資料可供匯出。');
+                return;
+            }
+
+            const outputData = {
+                videoName: activeVideoFile.name,
+                videoSize: activeVideoFile.size,
+                exportTime: new Date().toISOString(),
+                totalSegments: segments.length,
+                data: segments
+            };
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(outputData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `video_slices_${Date.now()}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        });
+    </script>
 </body>
 </html>
