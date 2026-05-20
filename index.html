@@ -567,56 +567,76 @@
         }
 
         // 5. 核心剪輯模組：利用 FFmpeg.wasm 進行無損高速切片下載
-        async function downloadSegment(id, startTime, endTime, buttonElement) {
-            if (!ffmpeg || !ffmpeg.isLoaded()) {
-                alert("剪輯核心尚未就緒。");
-                return;
-            }
+        // 5. 核心剪輯模組：優化版轉碼切片下載（解決記憶體與格式不相容問題）
+async function downloadSegment(id, startTime, endTime, buttonElement) {
+    if (!ffmpeg || !ffmpeg.isLoaded()) {
+        alert("剪輯核心尚未就緒。");
+        return;
+    }
 
-            const originalBtnText = buttonElement.textContent;
-            buttonElement.disabled = true;
-            buttonElement.textContent = "⚡ 正在無損切片...";
-            buttonElement.style.background = "#6366f1";
+    const originalBtnText = buttonElement.textContent;
+    buttonElement.disabled = true;
+    buttonElement.textContent = "⚡ 正在精準切片...";
+    buttonElement.style.background = "#6366f1";
 
-            try {
-                const inputName = 'input_product_video.mp4';
-                const outputName = `product_slice_${id}.mp4`;
-                
-                ffmpeg.FS('writeFile', inputName, await fetchFile(videoFile));
-                const duration = endTime - startTime;
+    const inputName = 'input_product_video.mp4';
+    const outputName = `product_slice_${id}.mp4`;
 
-                // 執行高精確度無損流切片 (-c copy)
-                await ffmpeg.run(
-                    '-ss', startTime.toFixed(3),
-                    '-i', inputName,
-                    '-t', duration.toFixed(3),
-                    '-c', 'copy',
-                    outputName
-                );
+    try {
+        statusText.textContent = `⏳ 正在將片段 #${id} 載入記憶體...`;
+        
+        // 1. 寫入虛擬檔案系統
+        ffmpeg.FS('writeFile', inputName, await fetchFile(videoFile));
+        const duration = endTime - startTime;
 
-                const data = ffmpeg.FS('readFile', outputName);
-                const sliceBlob = new Blob([data.buffer], { type: 'video/mp4' });
-                const downloadUrl = URL.createObjectURL(sliceBlob);
+        statusText.textContent = `🎬 正在渲染與對齊影格（請稍候，此步最耗效能）...`;
 
-                const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = `${videoFile.name.split('.')[0]}_產品介紹_${id}.mp4`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
+        // 2. 執行精準時間軸切片
+        // -ss 放前面：快速定位
+        // 移除 -c copy，改用 ultrafast 速度進行精準 H.264 再編碼，並強制aac音訊，確保100%相容性
+        await ffmpeg.run(
+            '-ss', startTime.toFixed(3),
+            '-i', inputName,
+            '-t', duration.toFixed(3),
+            '-vcodec', 'libx264',
+            '-preset', 'ultrafast',  // 用最快速度編碼，節省瀏覽器負擔
+            '-crf', '26',            // 微調畫質（26為速度與檔案體積的最佳平衡點）
+            '-acodec', 'aac',
+            '-b:a', '128k',
+            outputName
+        );
 
-                URL.revokeObjectURL(downloadUrl);
-                ffmpeg.FS('unlink', outputName);
-                
-            } catch (error) {
-                console.error(error);
-                alert("切片下載失敗，可能因為格式不相容或瀏覽器記憶體不足。");
-            } finally {
-                buttonElement.disabled = false;
-                buttonElement.textContent = originalBtnText;
-                buttonElement.style.background = "var(--success)";
-            }
-        }
+        statusText.textContent = `📥 片段 #${id} 處理完成，開始下載...`;
+
+        // 3. 讀出檔案並建立下載連結
+        const data = ffmpeg.FS('readFile', outputName);
+        const sliceBlob = new Blob([data.buffer], { type: 'video/mp4' });
+        const downloadUrl = URL.createObjectURL(sliceBlob);
+
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `${videoFile.name.split('.')[0]}_產品介紹_${id}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        // 4. 【極重要】立刻釋放這一段的 URL 快取與刪除虛擬檔案，清空記憶體
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
+        statusText.textContent = `✨ 片段 #${id} 下載成功！`;
+        
+    } catch (error) {
+        console.error("FFmpeg 執行錯誤明細:", error);
+        alert(`❌ 片段 #${id} 切片失敗。\n原因：此影片解析度過高/檔案過大，導致瀏覽器虛擬記憶體不足。建議嘗試「較短的影片」或降低原始影片解析度。`);
+    } finally {
+        // 5. 無論成功或失敗，都必須把虛擬空間清理乾淨，否則下一段絕對會爆
+        try { ffmpeg.FS('unlink', inputName); } catch(e){}
+        try { ffmpeg.FS('unlink', outputName); } catch(e){}
+        
+        buttonElement.disabled = false;
+        buttonElement.textContent = originalBtnText;
+        buttonElement.style.background = "var(--success)";
+    }
+}
 
         function formatTime(seconds) {
             const min = Math.floor(seconds / 60);
