@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoCut AI - 全自動智慧影片切片系統</title>
+    <title>AutoCut Pro - 產品介紹影片自動切片系統</title>
+    <!-- 引入 FFmpeg.wasm 核心與工具庫 -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
         :root {
             --bg-main: #f1f5f9;
@@ -13,6 +15,7 @@
             --primary: #4f46e5;
             --primary-hover: #4338ca;
             --success: #10b981;
+            --success-hover: #059669;
             --border: #cbd5e1;
         }
 
@@ -43,7 +46,7 @@
 
         .main-container {
             display: grid;
-            grid-template-columns: 1fr 450px;
+            grid-template-columns: 1fr 480px;
             gap: 24px;
             flex: 1;
         }
@@ -92,7 +95,6 @@
             height: 100%;
         }
 
-        /* 進度條與狀態 */
         .analysis-status {
             display: none;
             margin-top: 16px;
@@ -118,7 +120,6 @@
             transition: width 0.1s ease;
         }
 
-        /* 參數控制區 */
         .config-panel {
             margin-top: 16px;
             display: grid;
@@ -141,11 +142,12 @@
             color: var(--text-muted);
         }
 
-        select, input {
+        select {
             padding: 8px;
             border-radius: 6px;
             border: 1px solid var(--border);
             font-size: 0.9rem;
+            background: white;
         }
 
         button {
@@ -155,13 +157,20 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
 
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--primary-hover); }
         .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
 
-        /* 右側切片列表 */
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: var(--success-hover); }
+        .btn-success:disabled { background: #94a3b8; cursor: not-allowed; }
+
         .sidebar {
             display: flex;
             flex-direction: column;
@@ -188,13 +197,16 @@
             grid-template-columns: 120px 1fr;
             gap: 12px;
             align-items: center;
-            cursor: pointer;
-            transition: transform 0.2s;
+            transition: border-color 0.2s;
         }
 
         .segment-card:hover {
-            transform: translateY(-2px);
             border-color: var(--primary);
+        }
+
+        .segment-thumb-container {
+            position: relative;
+            cursor: pointer;
         }
 
         .segment-thumb {
@@ -203,17 +215,36 @@
             background: #000;
             border-radius: 4px;
             object-fit: cover;
+            display: block;
+        }
+
+        .play-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            border-radius: 4px;
+        }
+
+        .segment-thumb-container:hover .play-overlay {
+            opacity: 1;
         }
 
         .segment-info {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 6px;
         }
 
         .segment-title {
             font-weight: bold;
-            color: var(--primary);
+            color: var(--text-main);
             font-size: 0.95rem;
         }
 
@@ -222,22 +253,33 @@
             color: var(--text-muted);
         }
 
+        .action-area {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .action-area button {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+
         .empty-state {
             color: var(--text-muted);
             text-align: center;
             padding: 40px 20px;
         }
 
-        #hiddenCanvas {
-            display: none;
-        }
+        #hiddenCanvas { display: none; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>🤖 AutoCut AI 全自動智慧影片切片系統</h1>
-        <button id="exportBtn" class="btn-primary" style="background: var(--success);" disabled>📦 匯出自動切片清單</button>
+        <h1>📦 AutoCut Pro 產品介紹影片自動切片系統</h1>
+        <div style="font-size: 0.9rem; background: #e2e8f0; padding: 6px 12px; border-radius: 20px; font-weight: 600;" id="ffmpegStatus">
+            ⏳ 正在初始化網頁端剪輯核心...
+        </div>
     </header>
 
     <div class="main-container">
@@ -246,8 +288,8 @@
             <div class="card">
                 <!-- 上傳區 -->
                 <div class="upload-zone" id="dropZone">
-                    <h2>📥 拖曳影片檔案至此處，或點擊上傳</h2>
-                    <p style="color: var(--text-muted); margin-top: 8px; font-size: 0.9rem;">系統將自動解析影片長度並智慧偵測分鏡切點</p>
+                    <h2>📥 拖曳產品介紹/直播影片至此處，或點擊上傳</h2>
+                    <p style="color: var(--text-muted); margin-top: 8px; font-size: 0.9rem;">系統將自動以黃金可看性長度（30-100秒）進行產品節點智慧切片</p>
                     <input type="file" id="videoInput" style="display: none;" accept="video/*">
                 </div>
 
@@ -256,60 +298,59 @@
                     <video id="mainVideo" controls></video>
                 </div>
 
-                <!-- 運算設定面板（上傳後可微調） -->
+                <!-- 運算設定面板 -->
                 <div class="config-panel" id="configPanel" style="display: none;">
                     <div class="config-group">
-                        <label>🎬 偵測靈敏度 (場景變更閾值)</label>
+                        <label>🎬 偵測靈敏度 (場景與產品切換強度)</label>
                         <select id="sensitivity">
-                            <option value="15">高靈敏度 (適合直播、細微畫面變動)</option>
-                            <option value="25" selected>標準偵測 (推薦，一般影片)</option>
-                            <option value="40">低靈敏度 (只抓超大畫面切換、換幕)</option>
+                            <option value="15">高靈敏度 (抓細微字卡或商品變動)</option>
+                            <option value="25" selected>標準偵測 (推薦，適合多數產品介紹)</option>
+                            <option value="35">低靈敏度 (只抓棚景切換、大畫面變更)</option>
                         </select>
                     </div>
                     <div class="config-group">
-                        <label>⏱️ 最小片段長度限制</label>
+                        <label>⏳ 最小片段長度限制 (確保介紹完整性)</label>
                         <select id="minDuration">
-                            <option value="2">至少 2 秒</option>
-                            <option value="5" selected>至少 5 秒</option>
-                            <option value="10">至少 10 秒</option>
+                            <option value="30" selected>🎬 至少 30 秒 (精煉產品短影音)</option>
+                            <option value="60">🎬 至少 60 秒 (標準產品詳細介紹)</option>
+                            <option value="100">🎬 至少 100 秒 (深度內容/完整開箱)</option>
                         </select>
                     </div>
                     <div class="config-group" style="grid-column: span 2; margin-top: 8px;">
-                        <button id="startAnalysisBtn" class="btn-primary">⚡ 開始全自動分析與切片</button>
+                        <button id="startAnalysisBtn" class="btn-primary" disabled>⚡ 請靜候核心載入...</button>
                     </div>
                 </div>
 
                 <!-- 分析進度條 -->
                 <div class="analysis-status" id="analysisStatus">
                     <div style="display: flex; justify-content: space-between; font-weight: 600;">
-                        <span id="statusText">AI 影像核心分析中...</span>
+                        <span id="statusText">正在初始化影片...</span>
                         <span id="progressPercent">0%</span>
                     </div>
                     <div class="progress-bar-bg">
                         <div class="progress-bar-fill" id="progressBarFill"></div>
                     </div>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">
-                        系統正以毫秒級速度抽樣全片影格，比對前後像素差值以自動生成重點節點。
-                    </p>
                 </div>
             </div>
         </div>
 
         <!-- 右側：自動生成片段成果區 -->
         <div class="card sidebar">
-            <h2>📌 自動生成片段 (<span id="segmentCount">0</span>)</h2>
+            <h2>📌 已生成高觀賞性產品片段 (<span id="segmentCount">0</span>)</h2>
             <div class="segment-list" id="segmentList">
                 <div class="empty-state" id="emptyState">
-                    尚未載入影片。上傳後系統將自動掃描並在此處生成節點清單。
+                    尚未載入影片。請先上傳影片並執行全自動智慧分析。
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 用於背景像素比對與抓取縮圖的隱藏 Canvas -->
+    <!-- 用於背景像素比對的隱藏 Canvas -->
     <canvas id="hiddenCanvas"></canvas>
 
     <script>
+        const { createFFmpeg, fetchFile } = FFmpeg;
+        let ffmpeg = null;
         let videoFile = null;
         let automaticSegments = [];
         
@@ -327,11 +368,30 @@
         const segmentList = document.getElementById('segmentList');
         const emptyState = document.getElementById('emptyState');
         const segmentCount = document.getElementById('segmentCount');
-        const exportBtn = document.getElementById('exportBtn');
+        const ffmpegStatus = document.getElementById('ffmpegStatus');
         const hiddenCanvas = document.getElementById('hiddenCanvas');
         const ctx = hiddenCanvas.getContext('2d');
 
-        // 上傳綁定
+        // 1. 初始化 FFmpeg.wasm 核心
+        async function initFFmpeg() {
+            try {
+                ffmpeg = createFFmpeg({ log: false });
+                await ffmpeg.load();
+                ffmpegStatus.textContent = "✅ 網頁端剪輯核心已就緒";
+                ffmpegStatus.style.background = "#d1fae5";
+                ffmpegStatus.style.color = "#065f46";
+                if(videoFile) startAnalysisBtn.disabled = false;
+                startAnalysisBtn.textContent = "⚡ 開始全自動分析與切片";
+            } catch (err) {
+                console.error(err);
+                ffmpegStatus.textContent = "❌ 核心載入失敗 (請在伺服器環境或安全連結下運行)";
+                ffmpegStatus.style.background = "#fee2e2";
+                ffmpegStatus.style.color = "#991b1b";
+            }
+        }
+        initFFmpeg();
+
+        // 2. 檔案上傳與拖曳處理
         dropZone.addEventListener('click', () => videoInput.click());
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); });
         dropZone.addEventListener('drop', (e) => {
@@ -342,7 +402,6 @@
             if (e.target.files.length > 0) initVideo(e.target.files[0]);
         });
 
-        // 初始化影片
         function initVideo(file) {
             videoFile = file;
             mainVideo.src = URL.createObjectURL(file);
@@ -351,20 +410,22 @@
             configPanel.style.display = 'grid';
             
             mainVideo.onloadedmetadata = () => {
-                statusText.textContent = `影片載入成功！總長度：${formatTime(mainVideo.duration)}。點擊下方按鈕開始自動分析。`;
+                statusText.textContent = `影片載入成功！總長度：${formatTime(mainVideo.duration)}。`;
                 analysisStatus.style.display = 'block';
-                progressBarFill.style.style = '0%';
-                progressPercent.textContent = '0%';
+                if (ffmpeg && ffmpeg.isLoaded()) {
+                    startAnalysisBtn.disabled = false;
+                }
             };
         }
 
-        // 核心演算法：全自動高速影格掃描與分鏡偵測
+        // 3. 核心演算法：產品介紹分鏡切片
         async function runAutoSegmentation() {
             startAnalysisBtn.disabled = true;
-            segmentList.innerHTML = '<div class="empty-state">分析中，請稍候...</div>';
+            segmentList.innerHTML = '<div class="empty-state">正在深度掃描全片影格結構，請稍候...</div>';
             
             const duration = mainVideo.duration;
-            const sampleRate = 0.5; // 每 0.5 秒抽樣一次畫面，兼顧精準度與運算速度
+            // 針對中長度片段，將抽樣步長調整為 1 秒一次，大幅提升大型影片的分析速度
+            const sampleRate = 1.0; 
             const threshold = parseFloat(document.getElementById('sensitivity').value);
             const minSegDuration = parseFloat(document.getElementById('minDuration').value);
             
@@ -372,36 +433,28 @@
             let lastFrameData = null;
             let lastCutTime = 0;
 
-            // 設置隱藏 Canvas 尺寸用於計算
             hiddenCanvas.width = 160;
             hiddenCanvas.height = 90;
 
             for (let time = 0; time < duration; time += sampleRate) {
-                // 強制讓影片核心跳轉到指定時間點（隱藏在背景）
                 mainVideo.currentTime = time;
                 await new Promise(r => mainVideo.onseeked = r);
 
-                // 將畫面繪製到 Canvas
                 ctx.drawImage(mainVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
                 const currentFrameData = ctx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height).data;
 
                 if (lastFrameData) {
-                    // 計算前後影格的色彩差異度 (RGB 絕對誤差平均值)
                     let totalDiff = 0;
                     for (let i = 0; i < currentFrameData.length; i += 4) {
-                        totalDiff += Math.abs(currentFrameData[i] - lastFrameData[i]);     // R
-                        totalDiff += Math.abs(currentFrameData[i+1] - lastFrameData[i+1]); // G
-                        totalDiff += Math.abs(currentFrameData[i+2] - lastFrameData[i+2]); // B
+                        totalDiff += Math.abs(currentFrameData[i] - lastFrameData[i]);
+                        totalDiff += Math.abs(currentFrameData[i+1] - lastFrameData[i+1]);
+                        totalDiff += Math.abs(currentFrameData[i+2] - lastFrameData[i+2]);
                     }
-                    const pixelCount = hiddenCanvas.width * hiddenCanvas.height;
-                    const averageDiff = totalDiff / (pixelCount * 3);
+                    const averageDiff = totalDiff / (hiddenCanvas.width * hiddenCanvas.height * 3);
 
-                    // 如果差異度高於閾值，且與上一個切點距離大於限制，則自動判定為新節點
+                    // 當畫面色彩差異大於閾值，且當前時間與「上個切點」的距離達到了設定的最小可看性長度（30/60/100s）
                     if (averageDiff > threshold && (time - lastCutTime) >= minSegDuration) {
-                        
-                        // 擷取當前畫面作為節點縮圖
-                        const thumbnail = hiddenCanvas.toDataURL('image/jpeg', 0.6);
-                        
+                        const thumbnail = hiddenCanvas.toDataURL('image/jpeg', 0.5);
                         automaticSegments.push({
                             id: automaticSegments.length + 1,
                             startTime: lastCutTime,
@@ -411,46 +464,41 @@
                         lastCutTime = time;
                     }
                 }
-
                 lastFrameData = currentFrameData;
 
-                // 更新進度條介面
                 const percent = Math.floor((time / duration) * 100);
                 progressBarFill.style.width = `${percent}%`;
                 progressPercent.textContent = `${percent}%`;
-                statusText.textContent = `正在全自動分析全片影格... 已掃描 ${formatTime(time)} / ${formatTime(duration)}`;
+                statusText.textContent = `智慧分析產品節點中... 已掃描 ${formatTime(time)} / ${formatTime(duration)}`;
             }
 
-            // 收尾：將最後一個片段補齊到影片結束
-            if (duration - lastCutTime > 2) {
-                ctx.drawImage(mainVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            // 補齊最後一段產品內容
+            if (duration - lastCutTime >= 5) {
                 automaticSegments.push({
                     id: automaticSegments.length + 1,
                     startTime: lastCutTime,
                     endTime: duration,
-                    thumbnail: hiddenCanvas.toDataURL('image/jpeg', 0.6)
+                    thumbnail: hiddenCanvas.toDataURL('image/jpeg', 0.5)
                 });
             }
 
-            // 分析完成，渲染結果
-            statusText.textContent = `✨ 全自動切片完成！共自動識別出 ${automaticSegments.length} 個場景片段。`;
+            statusText.textContent = `✨ 產品切片解析完成！成功產出 ${automaticSegments.length} 個高觀賞性片段。`;
             progressBarFill.style.width = '100%';
             progressPercent.textContent = '100%';
             startAnalysisBtn.disabled = false;
-            exportBtn.disabled = false;
             
             renderAutoSegments();
         }
 
         startAnalysisBtn.addEventListener('click', runAutoSegmentation);
 
-        // 渲染生成片段至介面
+        // 4. 渲染生成的片段與下載按鈕
         function renderAutoSegments() {
             segmentList.innerHTML = '';
             segmentCount.textContent = automaticSegments.length;
 
             if (automaticSegments.length === 0) {
-                segmentList.innerHTML = '<div class="empty-state">未能偵測到明顯斷點，請嘗試提高靈敏度重試。</div>';
+                segmentList.innerHTML = '<div class="empty-state">在此靈敏度與長度限制下未能識別出明顯切點，建議調高靈敏度或上傳較長影片重試。</div>';
                 return;
             }
 
@@ -458,53 +506,97 @@
                 const card = document.createElement('div');
                 card.className = 'segment-card';
                 card.innerHTML = `
-                    <img class="segment-thumb" src="${seg.thumbnail}" alt="縮圖">
+                    <div class="segment-thumb-container" data-start="${seg.startTime}">
+                        <img class="segment-thumb" src="${seg.thumbnail}">
+                        <div class="play-overlay">▶</div>
+                    </div>
                     <div class="segment-info">
-                        <div class="segment-title">🎬 自動片段 #${seg.id}</div>
+                        <div class="segment-title">📦 產品片段 #${seg.id}</div>
                         <div class="segment-meta">時間軸: ${formatTime(seg.startTime)} - ${formatTime(seg.endTime)}</div>
-                        <div class="segment-meta">總長度: ${(seg.endTime - seg.startTime).toFixed(1)} 秒</div>
+                        <div class="segment-meta">片段總長: ${(seg.endTime - seg.startTime).toFixed(1)} 秒</div>
+                        <div class="action-area">
+                            <button class="btn-success btn-download" data-id="${seg.id}" data-start="${seg.startTime}" data-end="${seg.endTime}">📥 下載此片段</button>
+                        </div>
                     </div>
                 `;
 
-                // 點擊片段，左側影片直接跳轉過去播放
-                card.addEventListener('click', () => {
+                // 點擊縮圖：預覽該產品片段
+                card.querySelector('.segment-thumb-container').addEventListener('click', () => {
                     mainVideo.currentTime = seg.startTime;
                     mainVideo.play();
+                });
+
+                // 點擊下載
+                card.querySelector('.btn-download').addEventListener('click', async (e) => {
+                    const btn = e.target;
+                    const id = btn.dataset.id;
+                    const start = parseFloat(btn.dataset.start);
+                    const end = parseFloat(btn.dataset.end);
+                    
+                    await downloadSegment(id, start, end, btn);
                 });
 
                 segmentList.appendChild(card);
             });
         }
 
-        // 時間格式化工具
+        // 5. 核心剪輯模組：利用 FFmpeg.wasm 進行無損高速切片下載
+        async function downloadSegment(id, startTime, endTime, buttonElement) {
+            if (!ffmpeg || !ffmpeg.isLoaded()) {
+                alert("剪輯核心尚未就緒。");
+                return;
+            }
+
+            const originalBtnText = buttonElement.textContent;
+            buttonElement.disabled = true;
+            buttonElement.textContent = "⚡ 正在無損切片...";
+            buttonElement.style.background = "#6366f1";
+
+            try {
+                const inputName = 'input_product_video.mp4';
+                const outputName = `product_slice_${id}.mp4`;
+                
+                ffmpeg.FS('writeFile', inputName, await fetchFile(videoFile));
+                const duration = endTime - startTime;
+
+                // 執行高精確度無損切片 (-c copy)
+                await ffmpeg.run(
+                    '-ss', startTime.toFixed(3),
+                    '-i', inputName,
+                    '-t', duration.toFixed(3),
+                    '-c', 'copy',
+                    outputName
+                );
+
+                const data = ffmpeg.FS('readFile', outputName);
+                const sliceBlob = new Blob([data.buffer], { type: 'video/mp4' });
+                const downloadUrl = URL.createObjectURL(sliceBlob);
+
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `${videoFile.name.split('.')[0]}_產品介紹_${id}.mp4`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                URL.revokeObjectURL(downloadUrl);
+                ffmpeg.FS('unlink', outputName);
+                
+            } catch (error) {
+                console.error(error);
+                alert("切片下載失敗，可能因為格式不相容或瀏覽器記憶體不足。");
+            } finally {
+                buttonElement.disabled = false;
+                buttonElement.textContent = originalBtnText;
+                buttonElement.style.background = "var(--success)";
+            }
+        }
+
         function formatTime(seconds) {
             const min = Math.floor(seconds / 60);
             const sec = Math.floor(seconds % 60);
             return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
         }
-
-        // JSON 資料匯出
-        exportBtn.addEventListener('click', () => {
-            const output = {
-                fileName: videoFile.name,
-                analysisTime: new Date().toISOString(),
-                totalSegmentsFound: automaticSegments.length,
-                segments: automaticSegments.map(s => ({
-                    id: s.id,
-                    startTime: s.startTime,
-                    endTime: s.endTime,
-                    durationSeconds: parseFloat((s.endTime - s.startTime).toFixed(2))
-                }))
-            };
-
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(output, null, 2));
-            const dlAnchor = document.createElement('a');
-            dlAnchor.setAttribute("href", dataStr);
-            dlAnchor.setAttribute("download", `auto_cuts_${Date.now()}.json`);
-            document.body.appendChild(dlAnchor);
-            dlAnchor.click();
-            dlAnchor.remove();
-        });
     </script>
 </body>
 </html>
