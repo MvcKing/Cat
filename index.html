@@ -301,11 +301,11 @@
                 <!-- 運算設定面板 -->
                 <div class="config-panel" id="configPanel" style="display: none;">
                     <div class="config-group">
-                        <label>🎬 偵測靈敏度 (場景與產品切換強度)</label>
+                        <label>🎬 偵測靈敏度 (顏色變化強度)</label>
                         <select id="sensitivity">
-                            <option value="15">高靈敏度 (抓細微字卡或商品變動)</option>
-                            <option value="25" selected>標準偵測 (推薦，適合多數產品介紹)</option>
-                            <option value="35">低靈敏度 (只抓棚景切換、大畫面變更)</option>
+                            <option value="12">高靈敏度 (抓細微字卡或商品變動)</option>
+                            <option value="20" selected>標準偵測 (推薦，適合多數產品介紹)</option>
+                            <option value="30">低靈敏度 (只抓大畫面、棚景切換)</option>
                         </select>
                     </div>
                     <div class="config-group">
@@ -353,6 +353,7 @@
         let ffmpeg = null;
         let videoFile = null;
         let automaticSegments = [];
+        let objectUrl = null;
         
         // DOM 元素
         const dropZone = document.getElementById('dropZone');
@@ -384,7 +385,7 @@
                 startAnalysisBtn.textContent = "⚡ 開始全自動分析與切片";
             } catch (err) {
                 console.error(err);
-                ffmpegStatus.textContent = "❌ 核心載入失敗 (請在伺服器環境或安全連結下運行)";
+                ffmpegStatus.textContent = "❌ 核心載入失敗 (請確認於 localhost 或 HTTPS 環境執行)";
                 ffmpegStatus.style.background = "#fee2e2";
                 ffmpegStatus.style.color = "#991b1b";
             }
@@ -404,7 +405,8 @@
 
         function initVideo(file) {
             videoFile = file;
-            mainVideo.src = URL.createObjectURL(file);
+            objectUrl = URL.createObjectURL(file);
+            mainVideo.src = objectUrl;
             dropZone.style.display = 'none';
             videoWrapper.style.display = 'block';
             configPanel.style.display = 'grid';
@@ -418,14 +420,13 @@
             };
         }
 
-        // 3. 核心演算法：產品介紹分鏡切片
+        // 3. 全新重構：安全且不卡死的背景影格解析演算法
         async function runAutoSegmentation() {
             startAnalysisBtn.disabled = true;
-            segmentList.innerHTML = '<div class="empty-state">正在深度掃描全片影格結構，請稍候...</div>';
+            segmentList.innerHTML = '<div class="empty-state">正在啟動背景獨立解碼掃描，請稍候...</div>';
             
             const duration = mainVideo.duration;
-            // 針對中長度片段，將抽樣步長調整為 1 秒一次，大幅提升大型影片的分析速度
-            const sampleRate = 1.0; 
+            const sampleRate = 1.0; // 每 1 秒抽樣一次影格
             const threshold = parseFloat(document.getElementById('sensitivity').value);
             const minSegDuration = parseFloat(document.getElementById('minDuration').value);
             
@@ -433,28 +434,47 @@
             let lastFrameData = null;
             let lastCutTime = 0;
 
-            hiddenCanvas.width = 160;
-            hiddenCanvas.height = 90;
+            hiddenCanvas.width = 100;
+            hiddenCanvas.height = 56; // 降解析度提高效能與比對精準度
 
+            // 建立一個完全獨立的隱藏 Video 物件，專門用來抽取像素，避免動到主播放器
+            const scanVideo = document.createElement('video');
+            scanVideo.src = objectUrl;
+            scanVideo.muted = true;
+            scanVideo.playsInline = true;
+            
+            await new Promise(r => scanVideo.onloadedmetadata = r);
+
+            // 採用時間推進的 Promise 遞迴調用，徹底防止 Loop 阻塞執行緒
             for (let time = 0; time < duration; time += sampleRate) {
-                mainVideo.currentTime = time;
-                await new Promise(r => mainVideo.onseeked = r);
+                // 1. 叫隱藏影片跳轉到指定秒數
+                scanVideo.currentTime = time;
+                
+                // 2. 嚴格等待該時間點的影格解碼完畢
+                await new Promise((resolve) => {
+                    scanVideo.onseeked = resolve;
+                });
 
-                ctx.drawImage(mainVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                // 3. 給予核心輕微緩衝時間，確保渲染管線已將資料寫入快取
+                await new Promise(r => setTimeout(r, 10));
+
+                // 4. 繪製到 Canvas 並提取 RGB 像素
+                ctx.drawImage(scanVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
                 const currentFrameData = ctx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height).data;
 
                 if (lastFrameData) {
                     let totalDiff = 0;
-                    for (let i = 0; i < currentFrameData.length; i += 4) {
-                        totalDiff += Math.abs(currentFrameData[i] - lastFrameData[i]);
-                        totalDiff += Math.abs(currentFrameData[i+1] - lastFrameData[i+1]);
-                        totalDiff += Math.abs(currentFrameData[i+2] - lastFrameData[i+2]);
+                    // 優化加速：跳躍式步長像素比對，降低 CPU 負擔
+                    for (let i = 0; i < currentFrameData.length; i += 8) {
+                        totalDiff += Math.abs(currentFrameData[i] - lastFrameData[i]);       // R
+                        totalDiff += Math.abs(currentFrameData[i+1] - lastFrameData[i+1]);   // G
+                        totalDiff += Math.abs(currentFrameData[i+2] - lastFrameData[i+2]);   // B
                     }
-                    const averageDiff = totalDiff / (hiddenCanvas.width * hiddenCanvas.height * 3);
+                    const averageDiff = totalDiff / (hiddenCanvas.width * hiddenCanvas.height * 1.5);
 
-                    // 當畫面色彩差異大於閾值，且當前時間與「上個切點」的距離達到了設定的最小可看性長度（30/60/100s）
+                    // 條件觸發：當像素差異大於敏感度，且距離上一個切點大於使用者設定的最短規格(30s/60s/100s)
                     if (averageDiff > threshold && (time - lastCutTime) >= minSegDuration) {
-                        const thumbnail = hiddenCanvas.toDataURL('image/jpeg', 0.5);
+                        const thumbnail = hiddenCanvas.toDataURL('image/jpeg', 0.6);
                         automaticSegments.push({
                             id: automaticSegments.length + 1,
                             startTime: lastCutTime,
@@ -466,21 +486,26 @@
                 }
                 lastFrameData = currentFrameData;
 
+                // 5. 更新前台進度條
                 const percent = Math.floor((time / duration) * 100);
                 progressBarFill.style.width = `${percent}%`;
                 progressPercent.textContent = `${percent}%`;
                 statusText.textContent = `智慧分析產品節點中... 已掃描 ${formatTime(time)} / ${formatTime(duration)}`;
             }
 
-            // 補齊最後一段產品內容
+            // 收尾：補齊最後一段產品的介紹尾巴
             if (duration - lastCutTime >= 5) {
                 automaticSegments.push({
                     id: automaticSegments.length + 1,
                     startTime: lastCutTime,
                     endTime: duration,
-                    thumbnail: hiddenCanvas.toDataURL('image/jpeg', 0.5)
+                    thumbnail: hiddenCanvas.toDataURL('image/jpeg', 0.6)
                 });
             }
+
+            // 釋放記憶體
+            scanVideo.src = "";
+            scanVideo.load();
 
             statusText.textContent = `✨ 產品切片解析完成！成功產出 ${automaticSegments.length} 個高觀賞性片段。`;
             progressBarFill.style.width = '100%';
@@ -498,7 +523,7 @@
             segmentCount.textContent = automaticSegments.length;
 
             if (automaticSegments.length === 0) {
-                segmentList.innerHTML = '<div class="empty-state">在此靈敏度與長度限制下未能識別出明顯切點，建議調高靈敏度或上傳較長影片重試。</div>';
+                segmentList.innerHTML = '<div class="empty-state">❌ 在目前的靈敏度下未能識別出切點。由於限制了最小片段長度，建議調高靈敏度（或選擇「高靈敏度」）再重試一次！</div>';
                 return;
             }
 
@@ -520,7 +545,7 @@
                     </div>
                 `;
 
-                // 點擊縮圖：預覽該產品片段
+                // 點擊縮圖：主播放器直接跳轉預覽
                 card.querySelector('.segment-thumb-container').addEventListener('click', () => {
                     mainVideo.currentTime = seg.startTime;
                     mainVideo.play();
@@ -559,7 +584,7 @@
                 ffmpeg.FS('writeFile', inputName, await fetchFile(videoFile));
                 const duration = endTime - startTime;
 
-                // 執行高精確度無損切片 (-c copy)
+                // 執行高精確度無損流切片 (-c copy)
                 await ffmpeg.run(
                     '-ss', startTime.toFixed(3),
                     '-i', inputName,
